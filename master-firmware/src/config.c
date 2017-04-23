@@ -50,6 +50,8 @@ void config_init(void)
 
     parameter_namespace_declare(&aversive_control, &aversive_config, "control");
     parameter_namespace_declare(&aversive_angle, &aversive_control, "angle");
+
+    // TODO set default values (i.e. 0)
     parameter_scalar_declare(&aversive_angle_kp, &aversive_angle, "kp");
     parameter_scalar_declare(&aversive_angle_ki, &aversive_angle, "ki");
     parameter_scalar_declare(&aversive_angle_kd, &aversive_angle, "kd");
