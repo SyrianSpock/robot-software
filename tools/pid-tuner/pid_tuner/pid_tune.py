@@ -225,34 +225,34 @@ class UAVCANThread(QThread):
 
         self.logger.debug('NodeStatus from node {}'.format(board))
 
-    def enable_current_pid_stream(self, board_id, enabled):
+    def enable_current_pid_stream(self, board_id, frequency):
         with self.lock:
             self.logger.info(
                 'Enabling current PID stream for {}'.format(board_id))
             req = uavcan.thirdparty.cvra.motor.config.FeedbackStream.Request()
             req.stream = req.STREAM_CURRENT_PID
-            req.enabled = enabled
-            req.frequency = self.FREQUENCY
+            req.enabled = bool(frequency)
+            req.frequency = frequency or 0
             self.node.request(req, board_id, self._check_error_callback)
 
-    def enable_velocity_pid_stream(self, board_id, enabled):
+    def enable_velocity_pid_stream(self, board_id, frequency):
         with self.lock:
             self.logger.info(
                 'Enabling velocity PID stream for {}'.format(board_id))
             req = uavcan.thirdparty.cvra.motor.config.FeedbackStream.Request()
             req.stream = req.STREAM_VELOCITY_PID
-            req.enabled = enabled
-            req.frequency = self.FREQUENCY
+            req.enabled = bool(frequency)
+            req.frequency = frequency or 0
             self.node.request(req, board_id, self._check_error_callback)
 
-    def enable_position_pid_stream(self, board_id, enabled):
+    def enable_position_pid_stream(self, board_id, frequency):
         with self.lock:
             self.logger.info(
                 'Enabling position PID stream for {}'.format(board_id))
             req = uavcan.thirdparty.cvra.motor.config.FeedbackStream.Request()
             req.stream = req.STREAM_POSITION_PID
-            req.enabled = enabled
-            req.frequency = self.FREQUENCY
+            req.enabled = bool(frequency)
+            req.frequency = frequency or 0
             self.node.request(req, board_id, self._check_error_callback)
 
     def set_current_gains(self, board_id, kp, ki, kd, ilim):
@@ -319,10 +319,18 @@ class UAVCANThread(QThread):
 
 class PIDTuner(QSplitter):
     paramsChanged = pyqtSignal(float, float, float, float)
+    plotFrequencyChanged = pyqtSignal(float)
 
     @pyqtSlot(float, float, float, float)
     def _pid_changed(self, *args):
         self.paramsChanged.emit(*args)
+
+    @pyqtSlot()
+    def _frequency_changed(self):
+        try:
+            self.plotFrequencyChanged.emit(float(self.plot_frequency.text()))
+        except ValueError:
+            pass
 
     def __init__(self, *args):
         super().__init__(*args)
@@ -333,10 +341,23 @@ class PIDTuner(QSplitter):
 
         self.params = PIDParam()
 
+        self.plot_frequency = QLineEdit('10')
+        v = QDoubleValidator()
+        v.setBottom(0)
+        self.plot_frequency.setValidator(v)
+        self.plot_frequency.returnPressed.connect(self._frequency_changed)
+
+        hbox = QHBoxLayout()
+        hbox.addWidget(QLabel("Plot frequency"))
+        hbox.addWidget(self.plot_frequency)
+        box_widget = QWidget()
+        box_widget.setLayout(hbox)
+
         vbox = QVBoxLayout()
 
         vbox.addWidget(self.params)
         vbox.addStretch(1)
+        vbox.addWidget(box_widget)
 
         box_widget = QWidget()
         box_widget.setLayout(vbox)
@@ -351,6 +372,9 @@ class PIDTuner(QSplitter):
 
     def set_setpoint_data(self, time, values):
         self.setpoint_plot.setData(time, values)
+
+    def getPlotFrequency(self):
+        return float(self.plot_frequency.text())
 
 
 class PIDApp(QMainWindow):
@@ -383,6 +407,8 @@ class PIDApp(QMainWindow):
         # TODO Check board ID
         self.position_data.append((timestamp, setpoint, feedback))
 
+        # TODO: This should not be done every time, because it makes Qt go to a halt
+        # Maybe it should be called from a timer instead
         timestamps = [s[0] for s in self.position_data]
         setpoints = [s[1] for s in self.position_data]
         feedbacks = [s[2] for s in self.position_data]
@@ -390,23 +416,36 @@ class PIDApp(QMainWindow):
         self.position_tuner.set_setpoint_data(timestamps, setpoints)
         self.position_tuner.set_feedback_data(timestamps, feedbacks)
 
-    @pyqtSlot(int)
-    def _tab_changed(self, tab):
+    @pyqtSlot()
+    def _plot_settings_changed(self):
+        tab = self.pages.currentIndex()
+
         self.logger.debug("Tab changed to {}".format(tab))
         if tab == SetpointType.TORQUE:
-            self.can_thread.enable_current_pid_stream(self.board_id, True)
-            self.can_thread.enable_velocity_pid_stream(self.board_id, False)
-            self.can_thread.enable_position_pid_stream(self.board_id, False)
+            self.can_thread.enable_current_pid_stream(
+                self.board_id, self.current_tuner.getPlotFrequency())
+            self.can_thread.enable_velocity_pid_stream(self.board_id, None)
+            self.can_thread.enable_position_pid_stream(self.board_id, None)
         elif tab == SetpointType.VELOCITY:
-            self.can_thread.enable_current_pid_stream(self.board_id, False)
-            self.can_thread.enable_velocity_pid_stream(self.board_id, True)
-            self.can_thread.enable_position_pid_stream(self.board_id, False)
+            self.can_thread.enable_current_pid_stream(self.board_id, None)
+            self.can_thread.enable_velocity_pid_stream(
+                self.board_id, self.velocity_tuner.getPlotFrequency())
+            self.can_thread.enable_position_pid_stream(self.board_id, None)
         elif tab == SetpointType.POSITION:
-            self.can_thread.enable_current_pid_stream(self.board_id, False)
-            self.can_thread.enable_velocity_pid_stream(self.board_id, False)
-            self.can_thread.enable_position_pid_stream(self.board_id, True)
+            self.can_thread.enable_current_pid_stream(self.board_id, None)
+            self.can_thread.enable_velocity_pid_stream(self.board_id, None)
+            self.can_thread.enable_position_pid_stream(
+                self.board_id, self.position_tuner.getPlotFrequency())
         else:
             raise RuntimeError("Unexpected tab")
+
+        # TODO we also need to do this when changing the plot frequency
+        self.current_data = deque(maxlen=int(
+            5 * self.current_tuner.getPlotFrequency()))
+        self.velocity_data = deque(maxlen=int(
+            5 * self.velocity_tuner.getPlotFrequency()))
+        self.position_data = deque(maxlen=int(
+            5 * self.position_tuner.getPlotFrequency()))
 
     @pyqtSlot(float, float, float, float)
     def _current_pid_change(self, kp, ki, kd, ilim):
@@ -488,15 +527,15 @@ class PIDApp(QMainWindow):
         self.velocity_tuner = PIDTuner()
         self.position_tuner = PIDTuner()
 
-        pages = QTabWidget()
-        pages.addTab(self.current_tuner, 'Current')
-        pages.addTab(self.velocity_tuner, 'Velocity')
-        pages.addTab(self.position_tuner, 'Position')
+        self.pages = QTabWidget()
+        self.pages.addTab(self.current_tuner, 'Current')
+        self.pages.addTab(self.velocity_tuner, 'Velocity')
+        self.pages.addTab(self.position_tuner, 'Position')
 
         self.step_config = StepConfigPanel("Step response")
 
         vbox = QVBoxLayout()
-        vbox.addWidget(pages)
+        vbox.addWidget(self.pages)
         vbox.addWidget(self.step_config)
 
         vbox_widget = QWidget()
@@ -509,7 +548,13 @@ class PIDApp(QMainWindow):
 
         # Connect all signals
 
-        pages.currentChanged.connect(self._tab_changed)
+        self.pages.currentChanged.connect(self._plot_settings_changed)
+        self.current_tuner.plotFrequencyChanged.connect(
+            self._plot_settings_changed)
+        self.velocity_tuner.plotFrequencyChanged.connect(
+            self._plot_settings_changed)
+        self.position_tuner.plotFrequencyChanged.connect(
+            self._plot_settings_changed)
 
         self.current_tuner.paramsChanged.connect(self._current_pid_change)
         self.velocity_tuner.paramsChanged.connect(self._velocity_pid_change)
@@ -562,6 +607,7 @@ def main():
     app = QApplication(sys.argv)
     ex = PIDApp(args.port, args.board)
     sys.exit(app.exec_())
+
 
 if __name__ == '__main__':
     main()
