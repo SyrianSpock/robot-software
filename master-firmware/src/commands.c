@@ -34,6 +34,7 @@
 #include "can/hand_driver.h"
 #include "strategy.h"
 #include <trace/trace.h>
+#include "servo.h"
 
 
 static void cmd_mem(BaseSequentialStream *chp, int argc, char *argv[]) {
@@ -1228,6 +1229,18 @@ static void cmd_trace(BaseSequentialStream *chp, int argc, char *argv[])
     }
 }
 
+static void cmd_servo(BaseSequentialStream *chp, int argc, char *argv[])
+{
+    if (argc != 2) {
+        chprintf(chp, "Usage: servo N POS\r\n");
+        return;
+    }
+    unsigned int n = atoi(argv[0]);
+    float pos = atof(argv[1]);
+
+    servo_set(n, pos);
+}
+
 const ShellCommand commands[] = {
     {"crashme", cmd_crashme},
     {"config_tree", cmd_config_tree},
@@ -1274,5 +1287,6 @@ const ShellCommand commands[] = {
     {"rocket", cmd_rocket},
     {"state", cmd_state},
     {"trace", cmd_trace},
+    {"servo", cmd_servo},
     {NULL, NULL}
 };
