@@ -313,21 +313,17 @@ void context_switch_hook(void *ntp, void *otp)
 {
     (void) otp;
 
-    /* The main thread does not have the same memory layout as the other ones
-       (it uses the process stack instead of its own stack), so we ignore it. */
-    if (ntp == &ch.mainthread) {
-        return;
-    }
-
     /* Note: We want to use mpu_configure_region inside a thread
        or an ISR context. It turns out ChibiOS doesn't like it (panic)
        if you lock around mpu_configure_region in here. */
-    mpu_configure_region(6,
+#if 1
+    mpu_configure_region(3,
                          /* we skip sizeof(thread_t) because the start of the working area is used by ChibiOS. */
-                         ntp + sizeof(thread_t) + 32,
+                         ((thread_t *)ntp)->wabase,
                          5, /* 32 bytes */
                          AP_NO_NO, /* no permission */
                          false);
+#endif
 
     const char *name = ((thread_t *)ntp)->name;
     if (name == NULL) {
