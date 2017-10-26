@@ -198,71 +198,25 @@ int main(void)
     /* Initialize the interthread communication bus. */
     messagebus_init(&bus, &bus_lock, &bus_condvar);
 
-
-    /* Initialise timestamp module */
-    timestamp_stm32_init();
-
-
-    /* bus enumerator init */
-    static __attribute__((section(".ccm"))) struct bus_enumerator_entry_allocator
-        bus_enum_entries_alloc[MAX_NB_BUS_ENUMERATOR_ENTRIES];
-
-    bus_enumerator_init(&bus_enumerator,
-                        bus_enum_entries_alloc,
-                        MAX_NB_BUS_ENUMERATOR_ENTRIES);
-
-
-    static __attribute__((section(".ccm"))) motor_driver_t motor_driver_buffer[MAX_NB_MOTOR_DRIVERS];
-
-    motor_manager_init(&motor_manager,
-                       motor_driver_buffer,
-                       MAX_NB_MOTOR_DRIVERS,
-                       &bus_enumerator);
-
-    /* Initialize motors */
-    init_base_motors();
-#ifdef DEBRA
-    chThdSleepMilliseconds(100);
-    init_arm_motors();
-#endif
-
     /* Load stored robot config */
     config_load_from_flash();
 
-    /* Start IP over Ethernet */
-    struct netif *ethernet_if;
-
     ip_thread_init();
-
-    chThdSleepMilliseconds(1000);
-    ethernet_if = netif_find("en0");
 
     // rpc_server_init();
     // message_server_init();
     // http_server_start();
 
-    /* Initiaze UAVCAN communication */
-    uavcan_node_start(10);
 
     /* Base init */
-    encoder_start();
-    robot_init();
-    base_controller_start();
-    position_manager_start();
-    trajectory_manager_start();
 
     /* Arms init */
 #ifdef DEBRA
     chThdSleepMilliseconds(5000);
 
-    arms_init();
-    arms_controller_start();
+    //arms_init();
+    //arms_controller_start();
 #endif
-
-    /* Initialize strategy thread, will wait for signal to begin game */
-    strategy_start();
-
-    stream_init();
 
     /* Initializes a serial-over-USB CDC driver.  */
     sduObjectInit(&SDU1);
@@ -329,5 +283,5 @@ void context_switch_hook(void *ntp, void *otp)
     if (name == NULL) {
         name = "no name";
     }
-    trace_string(TRACE_POINT_CONTEXT_SWITCH, name);
+    //trace_string(TRACE_POINT_CONTEXT_SWITCH, name);
 }

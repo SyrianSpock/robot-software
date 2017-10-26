@@ -523,6 +523,7 @@ void context_switch_hook(void *ntp, void *otp);
 // chprintf float enable
 #define CHPRINTF_USE_FLOAT true
 
+
 /** @} */
 
 /*===========================================================================*/

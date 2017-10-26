@@ -45,7 +45,7 @@ USE_PROCESS_STACKSIZE = 5000
 
 # Stack size to the allocated to the Cortex-M main/exceptions stack. This
 # stack is used for processing interrupts and exceptions.
-USE_EXCEPTIONS_STACKSIZE = 0x400
+USE_EXCEPTIONS_STACKSIZE = 0x5000
 
 # Enables the use of FPU on Cortex-M4 (no, softfp, hard).
 USE_FPU = no
