@@ -12,9 +12,6 @@ void scara_init(scara_t *arm)
 {
     memset(arm, 0, sizeof(scara_t));
 
-    /* Sets last loop run date for lag compensation. */
-    arm->last_loop = scara_time_get();
-
     arm->shoulder_mode = SHOULDER_BACK;
     arm->control_mode = CONTROL_JOINT_POSITION;
 
@@ -109,12 +106,11 @@ void scara_manage(scara_t *arm)
     scara_read_joint_positions(arm);
 
     if (arm->trajectory.frame_count == 0) {
-        arm->last_loop = current_date;
         chMtxUnlock(&arm->lock);
         return;
     }
 
-    scara_waypoint_t frame = scara_position_for_date(arm, scara_time_get());
+    scara_waypoint_t frame = scara_position_for_date(arm, current_date);
 
     /* Compute target arm position (without hand) */
     point_t target = {.x = frame.position[0], .y = frame.position[1]};
@@ -124,8 +120,6 @@ void scara_manage(scara_t *arm)
     DEBUG("Inverse kinematics: found %d possible solutions", kinematics_solution_count);
 
     if (kinematics_solution_count == 0) {
-        arm->last_loop = current_date;
-
         arm->shoulder_joint.set_velocity(arm->shoulder_joint.args, 0);
         arm->elbow_joint.set_velocity(arm->elbow_joint.args, 0);
 
@@ -151,8 +145,6 @@ void scara_manage(scara_t *arm)
     if (beta > M_PI) {
         beta = beta - 2 * M_PI;
     }
-
-    arm->last_loop = scara_time_get();
 
     if (arm->control_mode == CONTROL_JAM_PID_XYA) {
         float measured_x, measured_y, measured_z;
